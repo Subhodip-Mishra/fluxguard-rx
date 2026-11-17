@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FluxGuard RX - Clinical Order Triage Report</title>
+    <style>
+        :root {
+            --bg-main: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --color-ready: #10b981;
+            --color-flagged: #f59e0b;
+            --color-blocked: #ef4444;
+            --color-primary: #3b82f6;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            padding: 2rem;
+            line-height: 1.5;
+        }
+        .header {
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+        }
+        .header-title h1 {
+            font-size: 1.85rem;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .header-subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+        .badge-hitl {
+            background: #2563eb22;
+            color: #60a5fa;
+            border: 1px solid #3b82f644;
+            padding: 0.35rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-card.ready { border-left: 4px solid var(--color-ready); }
+        .stat-card.flagged { border-left: 4px solid var(--color-flagged); }
+        .stat-card.blocked { border-left: 4px solid var(--color-blocked); }
+        .stat-card.total { border-left: 4px solid var(--color-primary); }
+        .stat-value { font-size: 2rem; font-weight: 700; }
+        .stat-label { color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; font-weight: 600; }
+        
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+        .tab-btn {
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+        }
+        .tab-btn:hover {
+            background: #33415555;
+            color: #fff;
+        }
+        .tab-btn.active {
+            background: #3b82f6;
+            color: #ffffff;
+        }
+
+        .table-container {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            text-align: left;
+        }
+        th {
+            background-color: #1e293b;
+            color: var(--text-muted);
+            padding: 0.85rem 1rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--border-color);
+        }
+        td {
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+        }
+        tr:hover td {
+            background-color: #27354a;
+        }
+        .cell-id { font-weight: bold; color: var(--text-muted); width: 45px; }
+        .cell-reason { max-width: 380px; font-size: 0.85rem; line-height: 1.4; }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.35rem 0.65rem;
+            border-radius: 9999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .badge-ready { background: #065f46; color: #6ee7b7; border: 1px solid #10b98144; }
+        .badge-flagged { background: #78350f; color: #fde68a; border: 1px solid #f59e0b44; }
+        .badge-blocked { background: #7f1d1d; color: #fca5a5; border: 1px solid #ef444444; }
+
+        .pill {
+            display: inline-block;
+            padding: 0.2rem 0.45rem;
+            border-radius: 0.25rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            margin-bottom: 0.2rem;
+        }
+        .pill-pass { background: #064e3b; color: #a7f3d0; }
+        .pill-flag { background: #713f12; color: #fde047; }
+        .pill-block { background: #7f1d1d; color: #fecaca; }
+
+        .med-tag {
+            background: #1e3a8a;
+            color: #bfdbfe;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .text-danger { color: #f87171 !important; }
+        .text-muted { color: var(--text-muted); }
+        .font-weight-bold { font-weight: bold; }
+
+        .footer {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">
+            <h1>🛡️ FluxGuard RX &bull; Clinical Order Triage</h1>
+            <div class="header-subtitle">Multi-Agent Human-in-the-Loop Safeguard Pipeline &bull; Semaglutide Prescribing Orders</div>
+        </div>
+        <div>
+            <span class="badge-hitl">HITL Invariant: Never Auto-Approve</span>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card total">
+            <span class="stat-label">Total Orders</span>
+            <span class="stat-value">25</span>
+        </div>
+        <div class="stat-card ready">
+            <span class="stat-label">Ready for Review</span>
+            <span class="stat-value">9</span>
+        </div>
+        <div class="stat-card flagged">
+            <span class="stat-label">Flagged (Risk/Titration)</span>
+            <span class="stat-value">8</span>
+        </div>
+        <div class="stat-card blocked">
+            <span class="stat-label">Blocked (Contraindicated)</span>
+            <span class="stat-value">8</span>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="filterTable('all', this)">All Orders (25)</button>
+        <button class="tab-btn" onclick="filterTable('ready-for-human-review', this)">🟢 Ready for Review (9)</button>
+        <button class="tab-btn" onclick="filterTable('flagged', this)">🟡 Flagged (8)</button>
+        <button class="tab-btn" onclick="filterTable('blocked', this)">🔴 Blocked (8)</button>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Patient Demographics</th>
+                    <th>Medication Order</th>
+                    <th>Clinical History & Meds</th>
+                    <th>Contraindication Agent</th>
+                    <th>Dose Agent</th>
+                    <th>Supervisor Triage</th>
+                    <th>Clinical Rationale (HITL Queue)</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr class="order-row filter-ready-for-human-review" data-status="ready-for-human-review">
+            <td class="cell-id">#1</td>
+            <td>
+                <strong>Alice Morgan</strong><br>
+                <small class="text-muted">Age: 42 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Metformin 500mg BID</small><br>
+                <small class="text-muted"><strong>History:</strong> T2D, BMI 31.5. No organ damage.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis, renal impairment, or concurrent insulin/sulfonylurea use, so there are no contraindications or high‑risk interactions with semaglutide.">The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis, renal imp...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.25 mg weekly dose is the standard initiation dose for a treatment‑naïve patient, meeting the guidelines for starting semaglutide.">The requested 0.25 mg weekly dose is the standard initiation dose for a tre...</small>
+            </td>
+            <td>
+                <span class="badge badge-ready">🟢 Ready for human review</span>
+            </td>
+            <td class="cell-reason">
+                Both contraindication and dose checks passed with no identified high‑risk factors. The order is ready for physician review and sign‑off.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-ready-for-human-review" data-status="ready-for-human-review">
+            <td class="cell-id">#2</td>
+            <td>
+                <strong>Robert Davis</strong><br>
+                <small class="text-muted">Age: 55 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Atorvastatin 20mg</small><br>
+                <small class="text-muted"><strong>History:</strong> Obesity, BMI 33.2, hyperlipidemia.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis history, renal impairment, or concurrent insulin/sulfonylurea use, so there are no contraindications or high‑risk drug interactions with semaglutide.">The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis history, r...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.25 mg weekly dose is the recommended initiation dose for a treatment‑naïve patient starting semaglutide for weight management.">The requested 0.25 mg weekly dose is the recommended initiation dose for a ...</small>
+            </td>
+            <td>
+                <span class="badge badge-ready">🟢 Ready for human review</span>
+            </td>
+            <td class="cell-reason">
+                Both contraindication and dose checks passed with no identified high‑risk factors. The order is ready for physician review and sign‑off.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-ready-for-human-review" data-status="ready-for-human-review">
+            <td class="cell-id">#3</td>
+            <td>
+                <strong>Clara Chen</strong><br>
+                <small class="text-muted">Age: 38 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> None</small><br>
+                <small class="text-muted"><strong>History:</strong> Obesity, BMI 32.0, non-diabetic.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="Clara has no pregnancy, thyroid cancer, MEN2, or other contraindications, and is not on insulin or sulfonylureas. No high‑risk drug interactions are present.">Clara has no pregnancy, thyroid cancer, MEN2, or other contraindications, a...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested dose of 0.25 mg weekly matches the recommended initiation dose for a treatment‑naïve patient.">The requested dose of 0.25 mg weekly matches the recommended initiation dos...</small>
+            </td>
+            <td>
+                <span class="badge badge-ready">🟢 Ready for human review</span>
+            </td>
+            <td class="cell-reason">
+                Both contraindication and dose checks passed. Semaglutide 0.25 mg weekly is appropriate for a treatment‑naïve patient with no identified contraindications.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-ready-for-human-review" data-status="ready-for-human-review">
+            <td class="cell-id">#4</td>
+            <td>
+                <strong>David Wilson</strong><br>
+                <small class="text-muted">Age: 61 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.5 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Amlodipine 5mg</small><br>
+                <small class="text-muted"><strong>History:</strong> Essential hypertension, BMI 30.8.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis, renal impairment, or concurrent insulin/sulfonylurea use, so there are no contraindications or high‑risk interactions with semaglutide.">The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis, renal imp...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The patient has completed the initial 4‑week course of 0.25 mg and is now appropriately titrated to 0.5 mg weekly, which is within the standard maintenance dosing schedule.">The patient has completed the initial 4‑week course of 0.25 mg and is now a...</small>
+            </td>
+            <td>
+                <span class="badge badge-ready">🟢 Ready for human review</span>
+            </td>
+            <td class="cell-reason">
+                The patient has no contraindications or high‑risk interactions, and the dose is within the standard titration schedule. The order is ready for physician evaluation and sign‑off.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-ready-for-human-review" data-status="ready-for-human-review">
+            <td class="cell-id">#5</td>
+            <td>
+                <strong>Elena Rostova</strong><br>
+                <small class="text-muted">Age: 49 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>1.0 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Metformin 1000mg BID</small><br>
+                <small class="text-muted"><strong>History:</strong> T2D, HbA1c 7.6%, BMI 29.5.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis, renal impairment, or concurrent insulin/sulfonylurea use, so there are no contraindications or high‑risk drug interactions with semaglutide.">The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis, renal imp...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 1.0 mg weekly dose is within the standard maintenance range and follows a proper titration from 0.5 mg after 6 weeks, so it is acceptable.">The requested 1.0 mg weekly dose is within the standard maintenance range a...</small>
+            </td>
+            <td>
+                <span class="badge badge-ready">🟢 Ready for human review</span>
+            </td>
+            <td class="cell-reason">
+                The patient has no contraindications or high‑risk drug interactions, and the 1.0 mg weekly semaglutide dose follows appropriate titration guidelines. The order is therefore ready for physician evaluation and sign‑off.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-ready-for-human-review" data-status="ready-for-human-review">
+            <td class="cell-id">#6</td>
+            <td>
+                <strong>James Miller</strong><br>
+                <small class="text-muted">Age: 52 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Lisinopril 10mg, Metformin 500mg</small><br>
+                <small class="text-muted"><strong>History:</strong> T2D, mild HTN, BMI 34.1.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis history, or renal impairment, and is not on insulin or sulfonylureas, so there are no contraindications or high‑risk drug interactions with semaglutide.">The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis history, o...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested dose of 0.25 mg weekly matches the recommended initiation dose for Semaglutide.">The requested dose of 0.25 mg weekly matches the recommended initiation dos...</small>
+            </td>
+            <td>
+                <span class="badge badge-ready">🟢 Ready for human review</span>
+            </td>
+            <td class="cell-reason">
+                Both contraindication and dose checks passed with no identified high‑risk factors. The order is ready for physician review and sign‑off.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-ready-for-human-review" data-status="ready-for-human-review">
+            <td class="cell-id">#7</td>
+            <td>
+                <strong>Sarah Jenkins</strong><br>
+                <small class="text-muted">Age: 44 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Levothyroxine 50mcg (hypothyroidism)</small><br>
+                <small class="text-muted"><strong>History:</strong> Primary hypothyroidism, stable TSH. BMI 31.0.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, no history of medullary thyroid carcinoma or MEN2, and is not taking insulin or sulfonylureas. No contraindications or high‑risk drug interactions with semaglutide were identified.">The patient has no pregnancy, no history of medullary thyroid carcinoma or ...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.25 mg weekly dose is the standard initiation dose for Semaglutide and is within the safe dosing range.">The requested 0.25 mg weekly dose is the standard initiation dose for Semag...</small>
+            </td>
+            <td>
+                <span class="badge badge-ready">🟢 Ready for human review</span>
+            </td>
+            <td class="cell-reason">
+                Both contraindication and dose checks passed with no identified risks. The order is ready for physician review and sign‑off.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-ready-for-human-review" data-status="ready-for-human-review">
+            <td class="cell-id">#8</td>
+            <td>
+                <strong>Carlos Santana</strong><br>
+                <small class="text-muted">Age: 58 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.5 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Losartan 50mg</small><br>
+                <small class="text-muted"><strong>History:</strong> BMI 32.5, metabolic syndrome.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="No contraindications or high‑risk drug interactions identified for Semaglutide in this patient.">No contraindications or high‑risk drug interactions identified for Semaglut...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.5 mg weekly dose is a standard maintenance dose following the 4‑week initiation period at 0.25 mg, aligning with recommended titration guidelines.">The requested 0.5 mg weekly dose is a standard maintenance dose following t...</small>
+            </td>
+            <td>
+                <span class="badge badge-ready">🟢 Ready for human review</span>
+            </td>
+            <td class="cell-reason">
+                Both contraindication and dose checks are clear. The 0.5 mg weekly semaglutide dose follows standard titration guidelines and no high‑risk interactions or contraindications were identified, so the order is ready for physician review and sign‑off.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-blocked" data-status="blocked">
+            <td class="cell-id">#9</td>
+            <td>
+                <strong>Emily Blunt</strong><br>
+                <small class="text-muted">Age: 29 | Pregnant: <span class="text-danger font-weight-bold">Pregnant (Yes)</span></small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Prenatal multivitamins</small><br>
+                <small class="text-muted"><strong>History:</strong> G1P0, 14 weeks pregnant, gestational glucose intolerance.</small>
+            </td>
+            <td>
+                <span class="pill pill-block">Contra: BLOCK</span><br>
+                <small class="text-muted" title="Semaglutide is strictly contraindicated in pregnancy due to risk of embryofetal toxicity.">Semaglutide is strictly contraindicated in pregnancy due to risk of embryof...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.25 mg weekly dose is the standard initiation dose for a treatment‑naïve patient, meeting the guidelines for starting Semaglutide.">The requested 0.25 mg weekly dose is the standard initiation dose for a tre...</small>
+            </td>
+            <td>
+                <span class="badge badge-blocked">🔴 Blocked</span>
+            </td>
+            <td class="cell-reason">
+                Semaglutide is strictly contraindicated in pregnancy due to risk of embryofetal toxicity, so the order must be blocked.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-blocked" data-status="blocked">
+            <td class="cell-id">#10</td>
+            <td>
+                <strong>Jessica Taylor</strong><br>
+                <small class="text-muted">Age: 33 | Pregnant: <span class="text-danger font-weight-bold">Pregnant (Yes)</span></small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.5 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Folic acid 800mcg</small><br>
+                <small class="text-muted"><strong>History:</strong> Confirmed intrauterine pregnancy (first trimester).</small>
+            </td>
+            <td>
+                <span class="pill pill-block">Contra: BLOCK</span><br>
+                <small class="text-muted" title="Semaglutide is strictly contraindicated in pregnancy due to risk of embryofetal toxicity.">Semaglutide is strictly contraindicated in pregnancy due to risk of embryof...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.5 mg weekly dose is within the standard maintenance range for Semaglutide, and the patient is a prior user continuing therapy.">The requested 0.5 mg weekly dose is within the standard maintenance range f...</small>
+            </td>
+            <td>
+                <span class="badge badge-blocked">🔴 Blocked</span>
+            </td>
+            <td class="cell-reason">
+                Semaglutide is strictly contraindicated in pregnancy due to risk of embryofetal toxicity, so the order must be blocked.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-blocked" data-status="blocked">
+            <td class="cell-id">#11</td>
+            <td>
+                <strong>Arthur Pendelton</strong><br>
+                <small class="text-muted">Age: 48 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> <span class="text-danger">Personal history of Medullary Thyroid Carcinoma (MTC) in 2018</span></small><br>
+                <small><strong>Meds:</strong> None</small><br>
+                <small class="text-muted"><strong>History:</strong> Status post total thyroidectomy for MTC.</small>
+            </td>
+            <td>
+                <span class="pill pill-block">Contra: BLOCK</span><br>
+                <small class="text-muted" title="Personal history of medullary thyroid carcinoma is a black‑box contraindication to semaglutide.">Personal history of medullary thyroid carcinoma is a black‑box contraindica...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.25 mg weekly dose is the standard initiation dose for semaglutide and is appropriate for a patient seeking weight loss treatment.">The requested 0.25 mg weekly dose is the standard initiation dose for semag...</small>
+            </td>
+            <td>
+                <span class="badge badge-blocked">🔴 Blocked</span>
+            </td>
+            <td class="cell-reason">
+                The patient has a personal history of medullary thyroid carcinoma, which is an absolute contraindication to semaglutide. Therefore the order must be blocked pending further evaluation.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-blocked" data-status="blocked">
+            <td class="cell-id">#12</td>
+            <td>
+                <strong>Brenda Vance</strong><br>
+                <small class="text-muted">Age: 36 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.5 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> <span class="text-danger">Family history of Multiple Endocrine Neoplasia type 2 (MEN 2)</span></small><br>
+                <small><strong>Meds:</strong> None</small><br>
+                <small class="text-muted"><strong>History:</strong> Mother and brother diagnosed with MEN 2A syndrome.</small>
+            </td>
+            <td>
+                <span class="pill pill-block">Contra: BLOCK</span><br>
+                <small class="text-muted" title="Semaglutide is contraindicated in patients with a personal or family history of Multiple Endocrine Neoplasia type 2 (MEN 2) due to the risk of medullary thyroid carcinoma.">Semaglutide is contraindicated in patients with a personal or family histor...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.5 mg weekly dose is within the standard maintenance range for semaglutide and is an appropriate step after the initial 0.25 mg dose.">The requested 0.5 mg weekly dose is within the standard maintenance range f...</small>
+            </td>
+            <td>
+                <span class="badge badge-blocked">🔴 Blocked</span>
+            </td>
+            <td class="cell-reason">
+                Semaglutide is contraindicated in patients with a personal or family history of Multiple Endocrine Neoplasia type 2 (MEN 2) due to the risk of medullary thyroid carcinoma.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-blocked" data-status="blocked">
+            <td class="cell-id">#13</td>
+            <td>
+                <strong>Gary Oldman</strong><br>
+                <small class="text-muted">Age: 63 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>1.0 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> Personal history of Medullary Thyroid Carcinoma</small><br>
+                <small><strong>Meds:</strong> Atorvastatin 40mg</small><br>
+                <small class="text-muted"><strong>History:</strong> Treated MTC 5 years ago, in remission.</small>
+            </td>
+            <td>
+                <span class="pill pill-block">Contra: BLOCK</span><br>
+                <small class="text-muted" title="Semaglutide is contraindicated in patients with a personal history of medullary thyroid carcinoma, as it carries a black‑box warning for this condition.">Semaglutide is contraindicated in patients with a personal history of medul...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 1.0 mg weekly dose is within the standard maintenance range for semaglutide and is appropriate for a patient referred for glycemic control.">The requested 1.0 mg weekly dose is within the standard maintenance range f...</small>
+            </td>
+            <td>
+                <span class="badge badge-blocked">🔴 Blocked</span>
+            </td>
+            <td class="cell-reason">
+                The patient has a personal history of medullary thyroid carcinoma, which is an absolute contraindication for semaglutide use. Therefore, the order must be blocked pending further evaluation.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-blocked" data-status="blocked">
+            <td class="cell-id">#14</td>
+            <td>
+                <strong>Samuel Jackson</strong><br>
+                <small class="text-muted">Age: 45 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> <span class="text-danger">Family history of MTC (Father)</span></small><br>
+                <small><strong>Meds:</strong> Metformin 850mg</small><br>
+                <small class="text-muted"><strong>History:</strong> Father died from medullary thyroid carcinoma.</small>
+            </td>
+            <td>
+                <span class="pill pill-block">Contra: BLOCK</span><br>
+                <small class="text-muted" title="Family history of medullary thyroid carcinoma is a black‑box contraindication for semaglutide.">Family history of medullary thyroid carcinoma is a black‑box contraindicati...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested dose of 0.25 mg weekly matches the recommended initiation dose for a treatment-naïve patient.">The requested dose of 0.25 mg weekly matches the recommended initiation dos...</small>
+            </td>
+            <td>
+                <span class="badge badge-blocked">🔴 Blocked</span>
+            </td>
+            <td class="cell-reason">
+                The patient has a family history of medullary thyroid carcinoma, which is a black‑box contraindication for semaglutide. Therefore the order must be blocked pending further evaluation.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-blocked" data-status="blocked">
+            <td class="cell-id">#15</td>
+            <td>
+                <strong>Chloe Bennet</strong><br>
+                <small class="text-muted">Age: 27 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>10.0 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> None</small><br>
+                <small class="text-muted"><strong>History:</strong> Severe obesity, BMI 41.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, no history of medullary thyroid carcinoma or MEN2, and is not taking insulin or sulfonylureas. No contraindications or high‑risk drug interactions are identified for semaglutide.">The patient has no pregnancy, no history of medullary thyroid carcinoma or ...</small>
+            </td>
+            <td>
+                <span class="pill pill-block">Dose: BLOCK</span><br>
+                <small class="text-muted" title="Requested dose of 10.0 mg weekly exceeds the maximum allowed dose of 2.4 mg weekly for semaglutide, constituting a supra‑therapeutic overdose.">Requested dose of 10.0 mg weekly exceeds the maximum allowed dose of 2.4 mg...</small>
+            </td>
+            <td>
+                <span class="badge badge-blocked">🔴 Blocked</span>
+            </td>
+            <td class="cell-reason">
+                The requested semaglutide dose of 10.0 mg weekly exceeds the maximum approved dose of 2.4 mg weekly, constituting a supra‑therapeutic overdose. This absolute contraindication requires the order to be blocked pending further review.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-blocked" data-status="blocked">
+            <td class="cell-id">#16</td>
+            <td>
+                <strong>Mark Wahlberg</strong><br>
+                <small class="text-muted">Age: 40 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>5.0 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Multivitamin</small><br>
+                <small class="text-muted"><strong>History:</strong> Bodybuilder aiming for extreme cut.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis, renal impairment, or concurrent insulin/sulfonylurea use, so there are no contraindications or high‑risk drug interactions with semaglutide.">The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis, renal imp...</small>
+            </td>
+            <td>
+                <span class="pill pill-block">Dose: BLOCK</span><br>
+                <small class="text-muted" title="Requested dose of 5.0 mg weekly exceeds the maximum allowed dose of 2.4 mg weekly for semaglutide, so the order is blocked.">Requested dose of 5.0 mg weekly exceeds the maximum allowed dose of 2.4 mg ...</small>
+            </td>
+            <td>
+                <span class="badge badge-blocked">🔴 Blocked</span>
+            </td>
+            <td class="cell-reason">
+                The requested semaglutide dose of 5.0 mg weekly exceeds the maximum approved dose of 2.4 mg weekly, rendering the order unsafe.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-flagged" data-status="flagged">
+            <td class="cell-id">#17</td>
+            <td>
+                <strong>George Martin</strong><br>
+                <small class="text-muted">Age: 67 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Glimepiride 4mg daily, Metformin 1000mg</small><br>
+                <small class="text-muted"><strong>History:</strong> T2D for 12 years, HbA1c 8.4%.</small>
+            </td>
+            <td>
+                <span class="pill pill-flag">Contra: FLAG</span><br>
+                <small class="text-muted" title="Semaglutide is being prescribed concurrently with glimepiride, a sulfonylurea, which significantly increases the risk of severe hypoglycemia and requires clinician review and possible dose adjustment of the sulfonylurea.">Semaglutide is being prescribed concurrently with glimepiride, a sulfonylur...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.25 mg weekly dose is the recommended initiation dose for semaglutide and follows the standard titration protocol.">The requested 0.25 mg weekly dose is the recommended initiation dose for se...</small>
+            </td>
+            <td>
+                <span class="badge badge-flagged">🟡 Flagged</span>
+            </td>
+            <td class="cell-reason">
+                The patient is concurrently taking glimepiride, a sulfonylurea, which increases the risk of severe hypoglycemia when combined with semaglutide. This interaction requires clinician review and possible adjustment of the sulfonylurea dose before proceeding.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-flagged" data-status="flagged">
+            <td class="cell-id">#18</td>
+            <td>
+                <strong>Fiona Apple</strong><br>
+                <small class="text-muted">Age: 59 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Insulin Glargine 35 units nightly, Glipizide 10mg</small><br>
+                <small class="text-muted"><strong>History:</strong> Long-standing T2D, high risk of hypoglycemia.</small>
+            </td>
+            <td>
+                <span class="pill pill-flag">Contra: FLAG</span><br>
+                <small class="text-muted" title="Concurrent use of Semaglutide with insulin and glipizide poses a high risk of severe hypoglycemia; clinician review and dose adjustment of the secretagogue are required.">Concurrent use of Semaglutide with insulin and glipizide poses a high risk ...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested dose of 0.25 mg weekly matches the recommended initiation dose for semaglutide, which is appropriate for a patient starting dual incretin therapy.">The requested dose of 0.25 mg weekly matches the recommended initiation dos...</small>
+            </td>
+            <td>
+                <span class="badge badge-flagged">🟡 Flagged</span>
+            </td>
+            <td class="cell-reason">
+                The patient is concurrently taking insulin and glipizide, and adding semaglutide poses a high risk of severe hypoglycemia. Clinician review and adjustment of the secretagogue dose are required before proceeding.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-flagged" data-status="flagged">
+            <td class="cell-id">#19</td>
+            <td>
+                <strong>Harold Finch</strong><br>
+                <small class="text-muted">Age: 71 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.5 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Glyburide 5mg daily</small><br>
+                <small class="text-muted"><strong>History:</strong> Mild cognitive decline, T2D, lives alone.</small>
+            </td>
+            <td>
+                <span class="pill pill-flag">Contra: FLAG</span><br>
+                <small class="text-muted" title="Concurrent use of semaglutide with the sulfonylurea glyburide poses a high risk of severe hypoglycemia; clinician review and dose adjustment of the secretagogue are required.">Concurrent use of semaglutide with the sulfonylurea glyburide poses a high ...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.5 mg weekly dose falls within the standard maintenance titration range for semaglutide and does not exceed the maximum dose limit.">The requested 0.5 mg weekly dose falls within the standard maintenance titr...</small>
+            </td>
+            <td>
+                <span class="badge badge-flagged">🟡 Flagged</span>
+            </td>
+            <td class="cell-reason">
+                Concurrent use of semaglutide with the sulfonylurea glyburide poses a high risk of severe hypoglycemia; clinician review and dose adjustment of the secretagogue are required.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-flagged" data-status="flagged">
+            <td class="cell-id">#20</td>
+            <td>
+                <strong>Lucas Graham</strong><br>
+                <small class="text-muted">Age: 46 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Omeprazole 20mg</small><br>
+                <small class="text-muted"><strong>History:</strong> Documented acute necrotizing pancreatitis 3 years ago.</small>
+            </td>
+            <td>
+                <span class="pill pill-flag">Contra: FLAG</span><br>
+                <small class="text-muted" title="The patient has a documented history of acute necrotizing pancreatitis, which is a major warning for GLP‑1 receptor agonists such as semaglutide. No absolute contraindications (e.g., pregnancy, thyroid cancer) are present, but clinician review is advised.">The patient has a documented history of acute necrotizing pancreatitis, whi...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested dose of 0.25 mg weekly is the standard initiation dose for semaglutide and follows the recommended titration schedule.">The requested dose of 0.25 mg weekly is the standard initiation dose for se...</small>
+            </td>
+            <td>
+                <span class="badge badge-flagged">🟡 Flagged</span>
+            </td>
+            <td class="cell-reason">
+                The patient has a documented history of acute necrotizing pancreatitis, a major warning for GLP‑1 receptor agonists such as semaglutide. Clinician review is advised before proceeding.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-flagged" data-status="flagged">
+            <td class="cell-id">#21</td>
+            <td>
+                <strong>Rachel Green</strong><br>
+                <small class="text-muted">Age: 39 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.5 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> None</small><br>
+                <small class="text-muted"><strong>History:</strong> BMI 35, history of gallstone pancreatitis in 2022.</small>
+            </td>
+            <td>
+                <span class="pill pill-flag">Contra: FLAG</span><br>
+                <small class="text-muted" title="The patient has a history of gallstone pancreatitis, which is a major warning for GLP‑1 receptor agonists such as semaglutide. No pregnancy, thyroid cancer, or MEN2 contraindications are present.">The patient has a history of gallstone pancreatitis, which is a major warni...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested 0.5 mg weekly dose is within the standard maintenance titration range for semaglutide and does not exceed the maximum allowed dose.">The requested 0.5 mg weekly dose is within the standard maintenance titrati...</small>
+            </td>
+            <td>
+                <span class="badge badge-flagged">🟡 Flagged</span>
+            </td>
+            <td class="cell-reason">
+                The patient has a history of gallstone pancreatitis, a major warning for GLP‑1 receptor agonists such as semaglutide. This clinical risk warrants physician review before proceeding.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-flagged" data-status="flagged">
+            <td class="cell-id">#22</td>
+            <td>
+                <strong>Peter Parker</strong><br>
+                <small class="text-muted">Age: 31 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>2.4 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> None</small><br>
+                <small class="text-muted"><strong>History:</strong> Obesity, BMI 36.5. Naïve to GLP-1s.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="No contraindications or high‑risk drug interactions identified for semaglutide in this patient.">No contraindications or high‑risk drug interactions identified for semaglut...</small>
+            </td>
+            <td>
+                <span class="pill pill-flag">Dose: FLAG</span><br>
+                <small class="text-muted" title="Patient is starting at the maximum maintenance dose of 2.4 mg weekly without prior titration, violating the recommended titration protocol.">Patient is starting at the maximum maintenance dose of 2.4 mg weekly withou...</small>
+            </td>
+            <td>
+                <span class="badge badge-flagged">🟡 Flagged</span>
+            </td>
+            <td class="cell-reason">
+                The patient is being started on the maximum maintenance dose of semaglutide (2.4 mg weekly) without prior titration, which violates recommended dosing guidelines and poses a risk of adverse effects.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-flagged" data-status="flagged">
+            <td class="cell-id">#23</td>
+            <td>
+                <strong>Diana Prince</strong><br>
+                <small class="text-muted">Age: 47 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>1.7 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Lisinopril 20mg</small><br>
+                <small class="text-muted"><strong>History:</strong> T2D, BMI 33. Naïve to GLP-1 agonists.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis history, renal impairment, or concurrent insulin/sulfonylurea use, so there are no contraindications or high‑risk drug interactions with semaglutide.">The patient has no pregnancy, thyroid cancer, MEN2, pancreatitis history, r...</small>
+            </td>
+            <td>
+                <span class="pill pill-flag">Dose: FLAG</span><br>
+                <small class="text-muted" title="Patient is starting directly on 1.7 mg weekly, bypassing the recommended 0.25 mg initiation and 0.5 mg titration steps.">Patient is starting directly on 1.7 mg weekly, bypassing the recommended 0....</small>
+            </td>
+            <td>
+                <span class="badge badge-flagged">🟡 Flagged</span>
+            </td>
+            <td class="cell-reason">
+                The patient is starting semaglutide directly at 1.7 mg weekly, bypassing the recommended 0.25 mg initiation and 0.5 mg titration steps, which poses a risk of adverse effects. This order should be reviewed and adjusted by a clinician before proceeding.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-flagged" data-status="flagged">
+            <td class="cell-id">#24</td>
+            <td>
+                <strong>Victor Stone</strong><br>
+                <small class="text-muted">Age: 65 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> None</small><br>
+                <small><strong>Meds:</strong> Furosemide 40mg, Metformin 500mg</small><br>
+                <small class="text-muted"><strong>History:</strong> Moderate renal impairment (eGFR 38 mL/min).</small>
+            </td>
+            <td>
+                <span class="pill pill-flag">Contra: FLAG</span><br>
+                <small class="text-muted" title="Patient has moderate renal impairment (eGFR 38 mL/min), which requires clinician monitoring when prescribing semaglutide; no other contraindications or high‑risk interactions identified.">Patient has moderate renal impairment (eGFR 38 mL/min), which requires clin...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested dose of 0.25 mg weekly is the standard initiation dose for semaglutide, which is within the recommended dosing guidelines.">The requested dose of 0.25 mg weekly is the standard initiation dose for se...</small>
+            </td>
+            <td>
+                <span class="badge badge-flagged">🟡 Flagged</span>
+            </td>
+            <td class="cell-reason">
+                Patient has moderate renal impairment (eGFR 38 mL/min) which requires clinician monitoring when prescribing semaglutide; therefore the order is flagged for review.
+            </td>
+        </tr>
+        
+        <tr class="order-row filter-ready-for-human-review" data-status="ready-for-human-review">
+            <td class="cell-id">#25</td>
+            <td>
+                <strong>Hannah Abbott</strong><br>
+                <small class="text-muted">Age: 34 | Pregnant: No</small>
+            </td>
+            <td>
+                <span class="med-tag">Semaglutide</span><br>
+                <strong>0.25 mg weekly</strong>
+            </td>
+            <td>
+                <small><strong>Thyroid:</strong> <span class="text-danger">History of benign thyroid nodules (Biopsy negative for MTC)</span></small><br>
+                <small><strong>Meds:</strong> Synthroid 75mcg</small><br>
+                <small class="text-muted"><strong>History:</strong> Benign follicular nodule on ultrasound 2023.</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Contra: PASS</span><br>
+                <small class="text-muted" title="The patient has no pregnancy, no medullary thyroid carcinoma or MEN2 history, and is not on insulin or sulfonylureas. No contraindications or high‑risk drug interactions are identified for semaglutide.">The patient has no pregnancy, no medullary thyroid carcinoma or MEN2 histor...</small>
+            </td>
+            <td>
+                <span class="pill pill-pass">Dose: PASS</span><br>
+                <small class="text-muted" title="The requested dose of 0.25 mg weekly is the standard initiation dose for semaglutide and is within the maximum dose limit.">The requested dose of 0.25 mg weekly is the standard initiation dose for se...</small>
+            </td>
+            <td>
+                <span class="badge badge-ready">🟢 Ready for human review</span>
+            </td>
+            <td class="cell-reason">
+                Both contraindication and dose checks passed. Semaglutide 0.25 mg weekly is an appropriate initiation dose with no identified risks, so the order is ready for physician review.
+            </td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+
+    <div class="footer">
+        <div>Generated by FluxGuard RX Autonomous Clinical Decision Support Agent</div>
+        <div>Timestamp: 2026-11-17 09:47:58 UTC</div>
+    </div>
+
+    <script>
+        function filterTable(status, btn) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const rows = document.querySelectorAll('.order-row');
+            rows.forEach(row => {
+                if (status === 'all' || row.dataset.status === status) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+</html>
